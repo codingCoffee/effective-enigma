@@ -17,8 +17,11 @@ services:
 install:
   - cat /etc/resolv.conf
   - cat /etc/apt/sources.list
-  - apt-get update
-  - apt-get upgrade
+  - whoami
+  - cat /etc/group # everythins
+  - grep -Po '^sudo.+:\K.*$' /etc/group #list all sudo users
+  - sudo apt-get update
+  - sudo apt-get upgrade
 
   - pip install flake8==3.3.0
   - flake8 . --count --select=E901,E999,F821,F822,F823 --show-source --statistics
