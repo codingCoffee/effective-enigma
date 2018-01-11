@@ -1,13 +1,6 @@
 language: python
 dist: trusty
 
-addons:
-  apt:
-    sources:
-      - google-chrome
-    packages:
-      - google-chrome-stable
-
 python:
   - "2.7"
 
@@ -21,80 +14,12 @@ install:
   - cat /etc/group # everythins
   - grep -Po '^sudo.+:\K.*$' /etc/group #list all sudo users
   - ls /etc/apt/sources.list.d/
-  # - sudo apt-get update
-  # - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-  # - echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
-  - sudo rm /etc/apt/sources.list.d/mongodb*.list
-  - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
-  - sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
-  - sudo apt-get update
-  # - sudo apt-get install google-chrome-stable  
-  - sudo apt-get upgrade
-
-  - pip install flake8==3.3.0
-  - flake8 . --count --select=E901,E999,F821,F822,F823 --show-source --statistics
-  - sudo rm /etc/apt/sources.list.d/docker.list
-  - sudo apt-get purge -y mysql-common mysql-server mysql-client
-  - nvm install v7.10.0
-  - wget https://raw.githubusercontent.com/frappe/bench/master/playbooks/install.py
-  - sudo python install.py --develop --user travis --without-bench-setup
-  - sudo pip install -e ~/bench
-
-  - rm $TRAVIS_BUILD_DIR/.git/shallow
-  - bash $TRAVIS_BUILD_DIR/travis/bench_init.sh
-  - cp -r $TRAVIS_BUILD_DIR/test_sites/test_site ~/frappe-bench/sites/
-
-before_script:
-  - wget http://chromedriver.storage.googleapis.com/2.33/chromedriver_linux64.zip
-  - unzip chromedriver_linux64.zip
-  - sudo apt-get install libnss3
-  - sudo apt-get --only-upgrade install google-chrome-stable
-  - sudo cp chromedriver /usr/local/bin/.
-  - sudo chmod +x /usr/local/bin/chromedriver
-  - export DISPLAY=:99.0
-  - sh -e /etc/init.d/xvfb start
-  - sleep 3
-  - mysql -u root -ptravis -e 'create database test_frappe'
-  - echo "USE mysql;\nCREATE USER 'test_frappe'@'localhost' IDENTIFIED BY 'test_frappe';\nFLUSH PRIVILEGES;\n" | mysql -u root -ptravis
-  - echo "USE mysql;\nGRANT ALL PRIVILEGES ON \`test_frappe\`.* TO 'test_frappe'@'localhost';\n" | mysql -u root -ptravis
-
-  - cd ~/frappe-bench
-  - bench get-app erpnext $TRAVIS_BUILD_DIR
-  - bench use test_site
-  - bench reinstall --yes
-  - bench build
-  - bench scheduler disable
-  - bench start &
-  - sleep 10
-
-jobs:
-  include:
-    - stage: test
-      script:
-        - set -e
-        - bench run-tests
-      env: Server Side Test
-    - # stage
-      script:
-        - bench --verbose run-setup-wizard-ui-test
-        - bench execute erpnext.setup.utils.enable_all_roles_and_domains
-        - bench run-ui-tests --app erpnext
-      env: Client Side Test
-    - # stage
-      script:
-        - bench --verbose run-setup-wizard-ui-test
-        - bench execute erpnext.setup.utils.enable_all_roles_and_domains
-        - bench run-ui-tests --app erpnext --test-list erpnext/tests/ui/tests2.txt
-      env: Client Side Test - 2
-    - # stage
-      script:
-        - bench --verbose run-setup-wizard-ui-test
-        - bench execute erpnext.setup.utils.enable_all_roles_and_domains
-        - bench run-ui-tests --app erpnext --test-list erpnext/tests/ui/agriculture.txt
-      env: Agriculture Client Side Test
-    - # stage
-      script:
-        - wget http://build.erpnext.com/20171108_190013_955977f8_database.sql.gz
-        - bench --force restore ~/frappe-bench/20171108_190013_955977f8_database.sql.gz --mariadb-root-password travis
-        - bench migrate
-      env: Patch Testing
+  - free -h
+  - lsblk
+  - lscpu
+  - cat /proc/cpuinfo
+  - lshw
+  - nproc
+  - sudo dmidecode
+  - sudo apt-get install -y inxi
+  - inxi -Cs
