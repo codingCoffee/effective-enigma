@@ -1,6 +1,13 @@
 language: python
 dist: trusty
 
+addons:
+  apt:
+    sources:
+      - google-chrome
+    packages:
+      - google-chrome-stable
+
 python:
   - "2.7"
 
@@ -14,14 +21,14 @@ install:
   - cat /etc/group # everythins
   - grep -Po '^sudo.+:\K.*$' /etc/group #list all sudo users
   - ls /etc/apt/sources.list.d/
-  - sudo apt-get update
-  - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-  - echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
+  # - sudo apt-get update
+  # - wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+  # - echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
   - sudo rm /etc/apt/sources.list.d/mongodb*.list
   - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
   - sudo bash -c 'echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" > /etc/apt/sources.list.d/mongodb-org-3.2.list'
   - sudo apt-get update
-  - sudo apt-get install google-chrome-stable  
+  # - sudo apt-get install google-chrome-stable  
   - sudo apt-get upgrade
 
   - pip install flake8==3.3.0
