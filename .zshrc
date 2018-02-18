@@ -9,12 +9,14 @@ antigen bundle heroku
 antigen bundle pip
 antigen bundle lein
 antigen bundle command-not-found
+antigen bundle sudo
 
 # Syntax highlighting bundle.
 antigen bundle zsh-users/zsh-syntax-highlighting
 
 # Load the theme.
-antigen theme https://github.com/denysdovhan/spaceship-zsh-theme spaceship
+antigen theme robbyrussell
+is-at-least $ZSH_VERSION '5.4' || antigen bundle denysdovhan/spaceship-zsh-theme
 
 # Tell Antigen that you're done.
 antigen apply
