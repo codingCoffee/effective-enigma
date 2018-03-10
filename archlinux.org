@@ -1,0 +1,732 @@
+
+** Archlinux
+*** Create a bootable USB for Archlinux
+    On a linux machine, connect the USB, and figure out the name of your USB using
+    #+BEGIN_SRC bash
+    lsblk
+    #+END_SRC
+    Run the following command, replacing {x} with your drive, e.g. /dev/sdb, if {x} = b. (Do not append a partition number, so do not use something like /dev/sdb1)
+    #+BEGIN_SRC bash
+    dd bs=4M if={path_to_archlinux.iso} of=/dev/sd{x} status=progress oflag=sync
+    #+END_SRC
+*** Installation
+    - Boot into BIOS and disable Secure Boot. UEFI is ON but Secure Boot is disabled. If you're not able to access the Secure Boot settings, set a Supervisor Password in BIOS and then try again. If you have a wired internet connection, plugin the ethernet cable before booting the PC.
+    - Verify the Boot mode and ensure its UEFI. Do this by executing the command below and verifying the directory exists
+      #+BEGIN_SRC bash
+      ls /sys/firmware/efi/efivars    
+      #+END_SRC
+    - Check the internet connection. Remember internet connection is mandatory.
+      #+BEGIN_SRC bash
+      ping -c3 google.com
+      #+END_SRC
+    - If connected, skip to the next step.
+      Check the output of ~ip link~ command. It should show a list of network interfaces to connect to. The interfaces starting with 'w' are usually the ones dealing with WiFi, and those starting with 'e' deal with the ethernet connection.
+      #+BEGIN_SRC bash
+      ip link
+      #+END_SRC
+      
+      If you have a wired ethernet cable, follow these steps, else, skip to the WiFi section. Connect your LAN cable and execute this
+      #+BEGIN_SRC bash
+      systemctl start dhcpcd@{ethernet_interface_name}.service
+      #+END_SRC
+      Try pinging again. You should be connected to the internet now.
+
+      Connection to WiFi:
+      - Find/Confirm your WiFi interface
+        #+BEGIN_SRC bash
+        iw dev
+        #+END_SRC
+      - Activate it using the {wifi_interface_name}
+        #+BEGIN_SRC bash
+        ip link set {wifi_interface_name} up
+        #+END_SRC
+      - Check if there's 'UP' in between '<' and '>'. {wifi_interface_name} will be referred to as {interface} henceforth
+        #+BEGIN_SRC bash
+        ip link
+        #+END_SRC
+      - Scan for WiFi
+        #+BEGIN_SRC bash
+        iw dev {interface} scan | less
+        #+END_SRC
+        
+        If you're using it in adhoc mode (a mode in which there is no central controller), you'll have to mention it, using this command. If you're trying to connect to a WiFi router, it's NOT adhoc mode, and you DON'T need to execute this command, since the WiFi router acts as a central controller.
+        #+BEGIN_SRC bash
+        ip link set {interface} down
+        iw dev {interface} set type ibss
+        ip link set {interface} up
+        #+END_SRC
+
+        - Make a note of your
+          - SSID (name of your network)
+          - Security
+        
+        - Encryption
+          - If there is no encryption on your WiFi, use
+            #+BEGIN_SRC bash
+            iw dev {interface} connect "{your_ESSID}"
+            #+END_SRC
+
+          - If there is encryption of type WEP
+            - using a hexadecimal or ASCII key (the format is distinguished automatically, because a WEP key has a fixed length):
+              #+BEGIN_SRC bash
+              iw dev {interface} connect "{your_ESSID}" key 0:{your_key}
+              #+END_SRC
+            - using a hexadecimal or ASCII key, specifying the third set up key as default (keys are counted from zero, four are possible):
+              #+BEGIN_SRC bash
+              iw dev interface connect "{your_ESSID}" key d:2:{your_key}
+              #+END_SRC
+        
+          - If it's WPA or WPA2
+            - A passphrase is generated using
+              #+BEGIN_SRC bash
+              wpa_passphrase {your_SSID} {passphrase}
+              #+END_SRC
+            - Connect to the network using
+              #+BEGIN_SRC bash
+              wpa_supplicant -B -i {interface} -c <(wpa_passphrase {MYSSID} {passphrase})
+              #+END_SRC
+            - Get an IP address allocated to your PC using dhcp
+              #+BEGIN_SRC bash
+              dhcpcd {interface}        
+              #+END_SRC
+
+      - Check if the interface is connected to the WiFi using
+        #+BEGIN_SRC bash
+        iw dev {interface} link
+        #+END_SRC
+      - Check the amount of bytes transmitted and received using
+        #+BEGIN_SRC bash
+        iw dev {interface} station dump
+        #+END_SRC
+
+      For more details visit https://wiki.archlinux.org/index.php/Wireless_network_configuration
+
+    - Set date
+      #+BEGIN_SRC bash
+      timedatectl set-ntp true
+      #+END_SRC
+
+    - Partitioning the disk
+      - Check the contents of the disk
+        #+BEGIN_SRC bash
+        lsblk
+        #+END_SRC
+      - Make sure none of the partitions you want to make are mounted by checking the MOUNTPOINT using
+        #+BEGIN_SRC bash
+        lsblk -f
+        #+END_SRC
+        In case they are mounted, use
+        #+BEGIN_SRC bash
+        umount /dev/sd{device_letter}{partition_number}
+        #+END_SRC
+        Do this for all the mounted partitions
+      - Making partitions
+        #+BEGIN_SRC bash
+        gdisk /dev/sd{device_letter}
+        #+END_SRC
+        - Delete everything and create a new partition table
+          #+BEGIN_SRC bash
+          o
+          #+END_SRC
+        - Create a new EFI partition
+          #+BEGIN_SRC bash
+          n
+          #+END_SRC
+          - Partition number (1-128, default 1):
+            #+BEGIN_SRC bash 
+            # press RETURN for default
+            #+END_SRC
+          - First Sector (34-976773134, default=2048) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            # press RETURN for default
+            #+END_SRC
+          - Last Sector (2048-976773134, default=976773134) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            +512M
+            #+END_SRC
+          - Current type is 'Linux filesystem'
+            HEX code or GUID (L to show codes, Enter = 8300):
+            #+BEGIN_SRC bash
+            EF00
+            #+END_SRC
+            This makes it an EFI partition
+        - Create a new SWAP partition
+          #+BEGIN_SRC bash
+          n
+          #+END_SRC
+          - Partition number (2-128, default 2):
+            #+BEGIN_SRC bash 
+            # press RETURN for default
+            #+END_SRC
+          - First Sector (34-976773134, default=1050624) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            # press RETURN for default
+            #+END_SRC
+          - Last Sector (1050624-976773134, default=976773134) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            +20G
+            #+END_SRC
+          - Current type is 'Linux filesystem'
+            HEX code or GUID (L to show codes, Enter = 8300):
+            #+BEGIN_SRC bash
+            8200
+            #+END_SRC
+            This makes it a SWAP partition
+        - Create a new root partition
+          #+BEGIN_SRC bash
+          n
+          #+END_SRC
+          - Partition number (3-128, default 3):
+            #+BEGIN_SRC bash 
+            # press RETURN for default
+            #+END_SRC
+          - First Sector (34-976773134, default=42993664) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            # press RETURN for default
+            #+END_SRC
+          - Last Sector (42993664-976773134, default=976773134) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            +80G
+            #+END_SRC
+          - Current type is 'Linux filesystem'
+            HEX code or GUID (L to show codes, Enter = 8300):
+            #+BEGIN_SRC bash
+            8304
+            #+END_SRC
+            This makes it a root partition
+        - Create a new home partition
+          #+BEGIN_SRC bash
+          n
+          #+END_SRC
+          - Partition number (3-128, default 3):
+            #+BEGIN_SRC bash 
+            # press RETURN for default
+            #+END_SRC
+          - First Sector (34-976773134, default=210765824) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            # press RETURN for default
+            #+END_SRC
+          - Last Sector (210765824-976773134, default=976773134) or {+-}size{KMGPT}:
+            #+BEGIN_SRC bash
+            # press RETURN for default, to select the remainder of the disk
+            #+END_SRC
+          - Current type is 'Linux filesystem'
+            HEX code or GUID (L to show codes, Enter = 8300):
+            #+BEGIN_SRC bash
+            8300
+            #+END_SRC
+            This makes it a home partition
+        Now write these changes to the disk
+        #+BEGIN_SRC bash
+        w
+        #+END_SRC
+        And proceed with a yes (~Y~)
+        Now check if the partitions were made according to your liking
+        #+BEGIN_SRC bash
+        lsblk
+        #+END_SRC
+      - Formatting partitions
+        #+BEGIN_SRC bash
+        mkfs.fat -F32 /dev/sda1  # format EFI partition as FAT32
+
+        mkswap /dev/sda2         # format SWAP partition as SWAP
+        swapon /dev/sda2
+
+        mkfs.ext4 /dev/sda3      # format root partition as EXT4
+
+        mkfs.ext4 /dev/sda4      # format home partition as EXT4
+        #+END_SRC
+
+    - Mounting the file system. Same procedure to be followed for debugging Archlinux
+      #+BEGIN_SRC bash
+      mount /dev/sda3 /mnt      # mount root
+
+      mkdir -p /mnt/boot        # create boot directory in mount
+      mount /dev/sda1 /mnt/boot # mount boot directory
+
+      mkdir -p /mnt/home        # create boot directory in mount
+      mount /dev/sda4 /mnt/home # mount boot directory
+      #+END_SRC
+
+    - Install archlinux
+      #+BEGIN_SRC bash
+      pacstrap /mnt base base-devel      
+      #+END_SRC
+
+    - Generate an fstab file. The fstab file can be used to define how disk partitions, various other block devices, or remote filesystems should be mounted into the filesystem.
+      #+BEGIN_SRC bash
+      genfstab -U /mnt >> /mnt/etc/fstab
+      #+END_SRC
+      Check the resulting file in /mnt/etc/fstab afterwards, and edit it in case of errors.
+
+    - Change root into the new system. Chroot is an operation that changes the apparent root directory for the current running process and their children. Changing root is commonly done for performing system maintenance on systems where booting and/or logging in is no longer possible. 
+      #+BEGIN_SRC bash
+      arch-chroot /mnt
+      #+END_SRC
+
+    - Set the timezone
+      #+BEGIN_SRC bash
+      ln -sf /usr/share/zoneinfo/{Region}/{City} /etc/localtime # Asia/Kolkata      
+      #+END_SRC
+
+    - Run hwclock to generate /etc/adjtime:
+      #+BEGIN_SRC bash
+      hwclock --systohc
+      #+END_SRC
+
+    - Uncomment ~en_US.UTF-8 UTF-8~ and other needed localizations in /etc/locale.gen, and generate them with
+      #+BEGIN_SRC bash
+      locale-gen
+      #+END_SRC
+
+    - Set the LANG variable in /etc/locale.conf accordingly, for example:
+      #+BEGIN_SRC conf
+      LANG=en_US.UTF-8
+      LC_CTYPE=en_US.UTF-8
+      LC_MESSAGES=en_US.UTF-8
+      LC_ALL=en_US.UTF-8
+      LANGUAGE="en_US.UTF-8"
+      #+END_SRC
+
+    - Change the keyboard layout, by the /etc/vconsole.conf file. It is US English by default 
+      #+BEGIN_SRC conf
+      KEYMAP=us
+      #+END_SRC
+
+    - Create hostname by editing /etc/hostname
+      #+BEGIN_SRC text
+      {my_host_name}
+      #+END_SRC
+
+    - Add this to /etc/hosts, if it doesn't exist
+      #+BEGIN_SRC text
+      127.0.0.1	localhost.localdomain	localhost
+      ::1		localhost.localdomain	localhost
+      127.0.1.1	{my_host_name}.localdomain	{my_host_name}
+      #+END_SRC
+
+    - Creating a new initramfs is usually not required, because mkinitcpio was run on installation of the linux package with pacstrap. But run it anyways
+      #+BEGIN_SRC bash
+      mkinitcpio -p linux
+      #+END_SRC
+
+    - Set the root password using
+      #+BEGIN_SRC bash
+      passwd
+      #+END_SRC
+
+    - Install intel-ucode. It provides microcode updates for Intel CPUs
+      #+BEGIN_SRC bash
+      pacman -S intel-ucode
+      #+END_SRC
+
+    - Installing the bootloader systemd-boot
+      #+BEGIN_SRC bash
+      bootctl install
+      bootctl update
+      #+END_SRC
+
+    - Edit the /boot/loader/loader.conf file and remove the long text and replace it with
+      #+BEGIN_SRC conf
+      default arch
+      #+END_SRC
+
+    - Adding boot entries. Create a file ~/boot/loader/entries/arch.conf~
+      #+BEGIN_SRC bash
+      blkid -s UUID -o value /dev/sd{device_letter}{root_partition_number} > /boot/loader/entries/arch.conf 
+      #+END_SRC
+      The UUID of the root partition will be extracted and added to the arch.conf file.
+
+    - Now edit the arch.conf file and add the following.
+      #+BEGIN_SRC conf
+      title  Arch Linux
+      linux  /vmlinuz-linux # it is vmlinuz not vmlinux
+      initrd  /intel-ucode.img # intel ucode thing provided you have installed it already
+      initrd  /initramfs-linux.img
+      options root=UUID={UUID_of_root_partition} rw #  rw at the end is important
+      #+END_SRC
+
+    - For hibernation, increase the size of sys/power/image_size, if you have a large SWAP partition, and decrease if you have a small one. By default it is 2/5 th the RAM size. Then make an entry in arch.conf
+      #+BEGIN_SRC bash
+      blkid -s UUID -o value /dev/sd{device_letter}{swap_partition_number} >> /boot/loader/entries/arch.conf 
+      #+END_SRC
+      This'll put the UUID of the SWAP partition at the end of the arch.conf file. Now modify the last line of the conf file 
+      #+BEGIN_SRC conf
+      options root=UUID={UUID_of_root_partition} resume=UUID={UUID_of_swap_partition} rw
+      #+END_SRC
+
+    - Install packages to ease installation after boot
+      List of packages needed
+      - iproute2: for ~ip~ to manage networking
+      - acpi: for checking battery percentage and stuff
+      - iw: for wireless connections
+      - wpa_supplicant: for wireless WPA protected connections
+      - git: a version control system
+      - dialog: A tool to display dialog boxes from shell scripts
+      - vim: a text editor
+      - zsh: shell
+      - curl: fetch things from internet
+      - wget: fetch things from internet
+      - aria2c: the best download manager
+      #+BEGIN_SRC bash
+      pacman -S iproute2 acpi iw wpa_supplicant dialog vim zsh git curl wget aria2c
+      #+END_SRC
+
+    - Reboot PC after unmounting the mounted partition
+      #+BEGIN_SRC bash
+      exit
+      umount -R /mnt
+      poweroff
+      #+END_SRC
+
+    - Remove the installation media and start PC, and connect to internet
+
+    - Check battery
+      #+BEGIN_SRC bash
+      acpi -b
+      #+END_SRC
+      If it's not installed, install it using ~pacman -S acpi~
+
+    - Activating zsh and using antigen
+      #+BEGIN_SRC bash
+      chsh -s $(which zsh)
+      curl -L git.io/antigen > $HOME/antigen.zsh
+      curl -L 'https://raw.githubusercontent.com/codingCoffee/effective-enigma/master/.zshrc' > $HOME/.zshrc
+      exec zsh
+      #+END_SRC
+
+    - Editing the /etc/pacman.conf for the better. 
+      1. Uncomment and/or add this.
+         #+BEGIN_SRC conf
+         #UseSyslog
+         #UseDelta #just mentioning, not fully supported in arch
+         Color
+         TotalDownload
+         CheckSpace
+         VerbosePkgLists
+         ILoveCandy
+         #+END_SRC
+      2. Use ~aria2c~ as the download manager instead of wget. Add the following new entry just below the "#XferCommand = /usr/bin/curl -C - -f %u > %o" line. The 2 caveats are you won't be able to see the overall download size, but downloads will be faster, and everytime you do ~pacman -Syu~ the database files will be downloaded again. 
+         #+BEGIN_SRC conf
+         XferCommand = /usr/bin/aria2c --allow-overwrite=true --continue=true --file-allocation=none --log-level=error --max-tries=2 --max-connection-per-server=5 --max-file-not-found=1 --min-split-size=1M --no-conf --remote-time=true --summary-interval=0 --timeout=3 --dir=/ --out %o %u
+         #+END_SRC
+
+    - Now installing the main stuff
+      - plasma: KDE desktop environment and other things
+        Select when asked
+        - ibglvnd                      over nvidia-304xx-utils
+        - phonon-qt5-gstreamer         over phonon-qt5-vlc
+        - libx264                      over libx264-10bit
+      - docker
+      - firefox
+      - aria2c
+      - libreoffice-fresh
+      - dolphin
+      - dolphin-plugins
+      - zip
+      - unzip
+      - unrar
+      - vlc
+      - p7zip
+      - rsync
+      - syncthing
+      - konsole
+      - openssh
+      - xdg-user-dirs
+      - git
+      - blender
+      - krita
+      - gimp
+      - inkscape
+      - scribus
+      - kwallet
+      - kwalletmanager
+      - networkmanager
+      - gst-plugins-bad: gstreamer plugins
+      - gst-plugins-ugly: gstreamer plugins
+      - gst-plugins-good: gstreamer plugins
+      - digikam: (gwenview alternative)
+      - spectacle: window management
+      - kio: Resource and network access abstraction
+      - kio-extras: extra utilities for kio
+      - ntfs-3g: 	NTFS filesystem driver and utilities
+      - fcron: feature rich cron implementation
+      - cups: printing daemon
+      - packagekit-qt5: installs packagekit as well (PackageKit is a system designed to make installing and updating software on your computer easier. The primary design goal is to unify all the software graphical tools used in different distributions, and use some of the latest technology like PolicyKit)
+      - print-manager
+      - gtk3: (for gtk3-print-backends)
+      - imagemagick: powerful tool to deal with images
+      - graphicsmagick: (imagemagick - bloat), however not as powerful or feature rich as imagemagick, but faster in some cases
+      - mesa: an open-source implementation of the OpenGL specification
+      - clementine: music player
+      - okular: pdf reader
+      - latte-dock
+      - gparted
+      - screenfetch: to generate a cool ASCII Art based on linux distro you're using
+      - bluez: bluetooth protocol stack
+      - bluez-utils: bluetoothctl utility
+      - pulseaudio-bluetooth: for interfacing bluetooth earphones
+      - thefuck: auto fix your commands
+      - linux-headers
+      - whois: reverse lookup IPs to domains
+      - noto-fonts: for normal fonts
+      - noto-fonts-cjk: for chinese, japanese and korean fonts
+      - noto-fonts-emoji: for emoji support
+      - noto-fonts-extra: for fonts
+      - arp-scan: commandline utility for scanning devices on network
+
+      #+BEGIN_SRC bash
+      pacman -S plasma docker firefox aria2c libreoffice-fresh dolphin dolphin-plugins zip unzip unrar vlc p7zip rsync syncthing konsole openssh xdg-user-dirs git blender krita gimp inkscape scribus kwallet kwalletmanager networkmanager gst-plugins-bad gst-plugins-ugly gst-plugins-good digikam spectacle kio kio-extras ntfs-3g fcron cups packagekit-qt5 print-manager gtk3 imagemagick graphicsmagick mesa clementine okular latte-dock gparted screenfetch bluez bluez-utils pulseaudio-bluetooth thefuck linux-headers whois
+      #+END_SRC
+
+    - Create a user
+      #+BEGIN_SRC bash
+      useradd -m -G wheel -s /bin/zsh {your_username}
+      #+END_SRC
+      Assign password to user
+      #+BEGIN_SRC bash
+      passwd {your_username}
+      #+END_SRC
+      Give the user sudo access by un-commenting ~%wheel ALL=(ALL) ALL~
+      #+BEGIN_SRC bash
+      visudo
+      #+END_SRC
+      su into your user
+      #+BEGIN_SRC bash
+      su - {your_username}
+      #+END_SRC
+      It'll ask you to fill the zshrc file. Press 0, to create an empty one.
+      Create the default folders using the xdg-user-dirs-update service
+      #+BEGIN_SRC bash
+      xdg-user-dirs-update
+      #+END_SRC
+      Make your shell look pretty
+      #+BEGIN_SRC bash
+      curl -L git.io/antigen > $HOME/antigen.zsh
+      curl -L 'https://raw.githubusercontent.com/codingCoffee/effective-enigma/master/.zshrc' > $HOME/.zshrc
+      exec zsh
+      #+END_SRC
+
+    - Switch back to root using
+      #+BEGIN_SRC bash
+      exit
+      #+END_SRC
+
+    - Final Steps to power up the System in GUI mode
+      #+BEGIN_SRC 
+      systemctl enable NetworkManager    # for Network discovery
+      systemctl enable org.cups.cupsd    # for printing services
+      systemctl enable sddm              # for GUI 
+      systemctl enable bluetooth.service # for bluetooth
+      #+END_SRC
+      Now create the sddm config
+      #+BEGIN_SRC bash 
+      sddm --example-config > /etc/sddm.conf 
+      #+END_SRC
+      Now edit the /etc/sddm.conf file to modify the two variables (Current, and CursorTheme) as shown
+      #+BEGIN_SRC conf
+      [Theme]
+      Current=breeze
+      CursorTheme=breeze_cursors
+      #+END_SRC
+
+    - Optionally comment the root entry from /etc/fstab if you're using systemd-boot as the boot manager instead of grub. (It'll make the bootup a little faster :P)
+
+    - Reboot your system
+      #+BEGIN_SRC bash
+      reboot
+      #+END_SRC
+
+    - Install Sublime Text from its official repo
+        Install the GPG key:
+        #+BEGIN_SRC bash
+        curl -O https://download.sublimetext.com/sublimehq-pub.gpg && sudo pacman-key --add sublimehq-pub.gpg && sudo pacman-key --lsign-key 8A8F901A && rm sublimehq-pub.gpg
+        #+END_SRC
+        Select the channel to use:
+        #+BEGIN_SRC bash
+        echo -e "\n[sublime-text]\nServer = https://download.sublimetext.com/arch/stable/x86_64" | sudo tee -a /etc/pacman.conf
+        #+END_SRC
+        Update pacman and install Sublime Text
+        #+BEGIN_SRC bash
+        sudo pacman -Syu sublime-text
+        #+END_SRC
+
+    - Building packages from AUR post booting into GUI mode
+      #+BEGIN_SRC bash
+      git clone {git_rpeo_url}
+      makepkg -sci
+      #+END_SRC
+      -s: sync dependencies and install them if any
+      -i: install the package after building it
+
+    - Packages to install from AUR
+      - google-chrome-beta
+      - spotify
+
+    - Change terminal profile
+      - Open Konsole
+      - Settings -> Edit Current Profile -> Select 'Linux Colors', then click on 'New'
+      - Modify the 1st and the 3rd background color to set 'Val' = 44
+      - Set Transparency to 10% and save
+    
+    - NVIDIA Drivers for GTX 1060
+      1. Installing nvidia optimus so that both GPUs can be used. Intel GPU is used for normal display, and Nvidia GPU can be used at will for machine learning and other stuff
+         #+BEGIN_SRC bash
+         pacman -S bumblebee mesa nvidia xf86-video-intel
+         #+END_SRC
+      2. Add your user to the bumblebee group
+         #+BEGIN_SRC bash
+         gpasswd -a {your_user_name} bumblebee
+         #+END_SRC
+      3. Enable bumblebee
+         #+BEGIN_SRC bash
+         systemctl enable bumblebeed
+         #+END_SRC
+      4. Reboot
+         #+BEGIN_SRC bash
+         reboot
+         #+END_SRC
+      5. Install other necessary stuff
+         #+BEGIN_SRC bash
+         pacman -S mesa-demos nvidia-settings
+         #+END_SRC
+      6. If your other GPU is intel you can use ~intel_gpu_top~ to check it's performance
+         #+BEGIN_SRC bash
+         pacman -S intel_gpu_tools
+         #+END_SRC
+      7. To check the usage of your GPU
+         #+BEGIN_SRC bash
+         nvidia-smi
+         #+END_SRC
+      8. In order to run anything on your GPU
+         #+BEGIN_SRC bash
+         optirun -b none {application_name} -c :8
+         #+END_SRC
+      9. To install cuda and cudnn for machine learning
+         #+BEGIN_SRC bash
+         pacman -S cuda cudnn
+         #+END_SRC
+      10. To ensure power saving by turning off the nvidia card when it is not in use
+          #+BEGIN_SRC bash
+          pacman -S bbswitch
+          #+END_SRC
+      11. Reboot
+          #+BEGIN_SRC bash
+          reboot
+          #+END_SRC
+
+    - Install VirtualBox
+      #+BEGIN_SRC bash
+      pacman -S virtualbox
+      #+END_SRC
+      Use virtualbox-host-modules-arch over virtualbox-host-dkms
+      To use virtualbox:
+      #+BEGIN_SRC bash
+      modprobe vboxdrv
+      #+END_SRC
+
+    - In order to reduce the shutdown time.
+      Create a folder for your conf file
+      #+BEGIN_SRC 
+      mkdir /etc/systemd/system.conf.d/
+      #+END_SRC
+      Create a file named ~timeout.conf~ in the ~system.conf.d~ folder and add the following to it
+      #+BEGIN_SRC conf
+      [Manager]
+      DefaultTimeoutStartSec=15s
+      DefaultTimeoutStopSec=5s
+      #+END_SRC
+
+    - To get amazing customizable touchpad gestures
+      1. Become a member of the input group
+         #+BEGIN_SRC bash
+         gpasswd -a $USER input
+         #+END_SRC
+         You'll have to logout and login for the gestures to workspace
+      2. Download and install from the AUR repo
+         #+BEGIN_SRC 
+         git clone https://aur.archlinux.org/libinput-gestures.git
+         cd libinput-gestures
+         makepkg -sci
+         #+END_SRC
+      3. To activate gestures at boot
+         #+BEGIN_SRC bash
+         libinput-gestures-setup autostart
+         #+END_SRC
+      4. Customize gestures
+         The guide, and the main gestures are present at ~/etc/libinput-gestures.conf~. You can override these by adding a file on ~$HOME/.config/libinput-gestures.conf~
+         #+BEGIN_SRC conf
+         # KDE: Present Windows (Current Desktop)
+         gesture swipe down 3	xdotool key ctrl+F9
+         
+         # KDE: Present Windows (All Desktops)
+         gesture swipe down 4	xdotool key ctrl+F10
+
+         # KDE: Present Windows (All Desktops)
+         gesture swipe up	xdotool key ctrl+F7
+
+         # KDE: Show desktop
+         gesture pinch out xdotool key ctrl+F12
+
+         # KDE: Switch one desktop to the left
+         gesture swipe right	xdotool key Super+Left
+
+         # KDE: Switch one desktop to the right
+         gesture swipe left	xdotool key Super+Right
+         #+END_SRC
+         You'll have to logout and login for changes to take effect
+
+    - To install powerpill for pacman
+      1. We need to add Xyne's gpg keys
+         #+BEGIN_SRC bash
+         gpg --recv-keys 1D1F0DC78F173680
+         #+END_SRC
+      2. Install all the following repos, in that order from AUR using makepkg
+         #+BEGIN_SRC text
+         https://aur.archlinux.org/python3-memoizedb.git
+         https://aur.archlinux.org/python3-xcgf.git
+         https://aur.archlinux.org/python3-xcpf.git
+         https://aur.archlinux.org/pm2ml.git
+         https://aur.archlinux.org/powerpill.git
+         #+END_SRC
+      3. Comment out SigLevel, and add as follows
+         #+BEGIN_SRC conf
+         #SigLevel    = Required DatabaseOptional
+         SigLevel = PackageRequired
+         #+END_SRC
+      4. Usage is same as pacman
+
+    - To install Redshift
+      #+BEGIN_SRC bash
+      pacman -S python-gobject python-xdg librsvg redshift
+      #+END_SRC
+      Create a redshift config file in ~/.config/redshift.conf
+      #+BEGIN_SRC conf
+      TODO
+      #+END_SRC
+
+    - [Don't use, causes bluetooth problems] To install power management  
+      #+BEGIN_SRC bash
+      pacman -S tlp
+      #+END_SRC
+      TO activate it run these commands
+      #+BEGIN_SRC bash
+      systemctl enable tlp.service
+      systemctl enable tlp-sleep.service
+      systemctl mask systemd-rfkill.service
+      systemctl mask systemd-rfkill.socket
+      #+END_SRC
+      Add the following to your ~/.profile file, where "01:00.0" is the address of your GPU. You can get this using lspci
+      #+BEGIN_SRC bash
+      export RUNTIME_PM_BLACKLIST="01:00.0"
+      #+END_SRC
+
+    - To install pdftk, install all the following repos, in that order from AUR using makepkg
+      #+BEGIN_SRC text
+      https://aur.archlinux.org/gcc-gcj-ecj.git
+      https://aur.archlinux.org/pdftk.git
+      #+END_SRC
+
+    - Set all fonts to noto
+      Goto Settings -> Fonts -> Except for "Fixed Width" which should be "Noto Mono", everything else should be "Noto Sana UI"
+      Also in Chrome do the same settings
