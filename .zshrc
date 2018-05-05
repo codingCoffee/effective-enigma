@@ -40,8 +40,6 @@ is-at-least $ZSH_VERSION '5.4' || antigen bundle denysdovhan/spaceship-zsh-theme
 # Tell Antigen that you're done.
 antigen apply
 
-source ~/./antigen.zsh
-
 # Added GPG key, for git
 export GPG_TTY=$(tty)
 
@@ -50,9 +48,22 @@ ccaria2c() {
     aria2c --summary-interval=0 --continue=true --log-level=error --max-connection-per-server=5 "$1"
 }
 
+# Pacman alias' for easy upgrade
+ccup() {
+	sudo powerpill -Syu
+}
+
+# Shutdown nvidia card for power saving in case it is on
+ccnvidia_stop() {
+	sudo rmmod nvidia
+	sudo tee /proc/acpi/bbswitch <<< OFF
+}
+
 # Activating fuck alias for thefuck module and aliasing it with k
 eval $(thefuck --alias)
 alias k=fuck
+
+PATH=$PATH:/home/coding_coffee/.local/bin/
 
 source ~/.profile
 
